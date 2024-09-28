@@ -389,6 +389,10 @@ Error TcatAgent::HandleSingleTlv(const Message &aIncomingMessage, Message &aOutg
             error = HandleSetActiveOperationalDataset(aIncomingMessage, offset, length);
             break;
 
+        case kTlvGetDiagnosticTlvs:
+            error = HandleGetDiagnosticTlvs(aIncomingMessage, aOutgoingMessage, offset, length, response);
+            break;
+
         case kTlvStartThreadInterface:
             error = HandleStartThreadInterface();
             break;
@@ -489,6 +493,27 @@ Error TcatAgent::HandleSetActiveOperationalDataset(const Message &aIncomingMessa
     }
 
     Get<ActiveDatasetManager>().SaveLocal(dataset);
+
+exit:
+    return error;
+}
+
+Error TcatAgent::HandleGetDiagnosticTlvs(const Message &aIncomingMessage,
+                                         Message       &aOutgoingMessage,
+                                         uint16_t       aOffset,
+                                         uint16_t       aLength,
+                                         bool          &response)
+{
+    Error error = kErrorNone;
+
+    if (!CheckCommandClassAuthorizationFlags(mCommissionerAuthorizationField.mApplicationFlags,
+                                             mDeviceAuthorizationField.mApplicationFlags, nullptr))
+    {
+        error = kErrorRejected;
+        ExitNow();
+    }
+
+    // TODO: implement diagnostics
 
 exit:
     return error;
