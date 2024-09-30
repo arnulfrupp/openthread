@@ -36,6 +36,7 @@
 #if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
 
 #include "instance/instance.hpp"
+#include "thread/network_diagnostic.hpp"
 
 namespace ot {
 namespace MeshCoP {
@@ -348,7 +349,7 @@ bool TcatAgent::CanProcessTlv(uint8_t aTlvType) const
     return IsCommandClassAuthorized(tlvCommandClass);
 }
 
-Error TcatAgent::HandleSingleTlv(const Message &aIncomingMessage, Message &aOutgoingMessage)
+Error TcatAgent::HandleSingleTlv(Message &aIncomingMessage, Message &aOutgoingMessage)
 {
     Error    error = kErrorParse;
     ot::Tlv  tlv;
@@ -390,7 +391,8 @@ Error TcatAgent::HandleSingleTlv(const Message &aIncomingMessage, Message &aOutg
             break;
 
         case kTlvGetDiagnosticTlvs:
-            error = HandleGetDiagnosticTlvs(aIncomingMessage, aOutgoingMessage, offset, length, response);
+            aIncomingMessage.SetOffset(offset);
+            error = HandleGetDiagnosticTlvs(aIncomingMessage, aOutgoingMessage, response);
             break;
 
         case kTlvStartThreadInterface:
@@ -500,8 +502,6 @@ exit:
 
 Error TcatAgent::HandleGetDiagnosticTlvs(const Message &aIncomingMessage,
                                          Message       &aOutgoingMessage,
-                                         uint16_t       aOffset,
-                                         uint16_t       aLength,
                                          bool          &response)
 {
     Error error = kErrorNone;
@@ -513,7 +513,14 @@ Error TcatAgent::HandleGetDiagnosticTlvs(const Message &aIncomingMessage,
         ExitNow();
     }
 
-    // TODO: implement diagnostics
+    error = Get<NetworkDiagnostic::Server>().AppendRequestedTlvs(aIncomingMessage, aOutgoingMessage);
+
+    if(error == kErrorNone)
+    {
+        response = true;
+    }
+
+    // TODO: USe temp message and only add to aOutgoingMessage if successful
 
 exit:
     return error;

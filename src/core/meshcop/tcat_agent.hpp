@@ -329,12 +329,10 @@ private:
     Error Connected(MeshCoP::SecureTransport &aTlsContext);
     void  Disconnected(void);
 
-    Error HandleSingleTlv(const Message &aIncomingMessage, Message &aOutgoingMessage);
+    Error HandleSingleTlv(Message &aIncomingMessage, Message &aOutgoingMessage);
     Error HandleSetActiveOperationalDataset(const Message &aIncomingMessage, uint16_t aOffset, uint16_t aLength);
     Error HandleGetDiagnosticTlvs(const Message &aIncomingMessage,
                                   Message       &aOutgoingMessage,
-                                  uint16_t       aOffset,
-                                  uint16_t       aLength,
                                   bool          &response);
     Error HandleDecomission(void);
     Error HandlePing(const Message &aIncomingMessage,

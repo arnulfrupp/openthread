@@ -45,6 +45,7 @@
 #include "thread/network_diagnostic_tlvs.hpp"
 #include "thread/tmf.hpp"
 #include "thread/uri_paths.hpp"
+#include "meshcop/tcat_agent.hpp"
 
 namespace ot {
 
@@ -228,6 +229,8 @@ private:
 #if OPENTHREAD_FTD
     Coap::MessageQueue mAnswerQueue;
 #endif
+
+    friend class MeshCoP::TcatAgent;
 };
 
 DeclareTmfHandler(Server, kUriDiagnosticGetRequest);
