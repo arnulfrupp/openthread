@@ -48,20 +48,15 @@
 namespace ot {
 namespace Mac {
 
-void Frame::InitMacHeader(Type             aType,
-                          Version          aVersion,
-                          const Addresses &aAddrs,
-                          const PanIds    &aPanIds,
-                          SecurityLevel    aSecurityLevel,
-                          KeyIdMode        aKeyIdMode,
-                          bool             aSuppressSequence)
+void TxFrame::Info::PrepareHeadersIn(TxFrame &aTxFrame) const
 {
     uint16_t     fcf;
     FrameBuilder builder;
+    uint8_t      micSize = 0;
 
-    fcf = static_cast<uint16_t>(aType) | static_cast<uint16_t>(aVersion);
+    fcf = static_cast<uint16_t>(mType) | static_cast<uint16_t>(mVersion);
 
-    switch (aAddrs.mSource.GetType())
+    switch (mAddrs.mSource.GetType())
     {
     case Address::kTypeNone:
         fcf |= kFcfSrcAddrNone;
@@ -74,30 +69,30 @@ void Frame::InitMacHeader(Type             aType,
         break;
     }
 
-    switch (aAddrs.mDestination.GetType())
+    switch (mAddrs.mDestination.GetType())
     {
     case Address::kTypeNone:
         fcf |= kFcfDstAddrNone;
         break;
     case Address::kTypeShort:
         fcf |= kFcfDstAddrShort;
-        fcf |= ((aAddrs.mDestination.GetShort() == kShortAddrBroadcast) ? 0 : kFcfAckRequest);
+        fcf |= ((mAddrs.mDestination.GetShort() == kShortAddrBroadcast) ? 0 : kFcfAckRequest);
         break;
     case Address::kTypeExtended:
         fcf |= (kFcfDstAddrExt | kFcfAckRequest);
         break;
     }
 
-    if (aType == kTypeAck)
+    if (mType == kTypeAck)
     {
         fcf &= ~kFcfAckRequest;
     }
 
-    fcf |= (aSecurityLevel != kSecurityNone) ? kFcfSecurityEnabled : 0;
+    fcf |= (mSecurityLevel != kSecurityNone) ? kFcfSecurityEnabled : 0;
 
     // PAN ID compression
 
-    switch (aVersion)
+    switch (mVersion)
     {
     case kVersion2003:
     case kVersion2006:
@@ -114,14 +109,14 @@ void Frame::InitMacHeader(Type             aType,
         //   PAN ID Compression field shall be set to zero, and both Destination PAN ID
         //   field and Source PAN ID fields shall be included in the transmitted frame.
 
-        if (!aAddrs.mSource.IsNone() && !aAddrs.mDestination.IsNone() &&
-            (aPanIds.GetSource() == aPanIds.GetDestination()))
+        if (!mAddrs.mSource.IsNone() && !mAddrs.mDestination.IsNone() &&
+            (mPanIds.GetSource() == mPanIds.GetDestination()))
         {
             fcf |= kFcfPanidCompression;
         }
 
         // Sequence Number Suppression bit was reserved, and must not be set on initialization.
-        OT_ASSERT(!aSuppressSequence);
+        OT_ASSERT(!mSuppressSequence);
         break;
 
     case kVersion2015:
@@ -146,12 +141,12 @@ void Frame::InitMacHeader(Type             aType,
         // | 14 | Short        | Short        | Present      | Not Present  |      1       |
         // +----+--------------+--------------+--------------+--------------+--------------+
 
-        if (aAddrs.mDestination.IsNone())
+        if (mAddrs.mDestination.IsNone())
         {
             // Dst addr not present - rows 1,2,5,6.
 
-            if ((aAddrs.mSource.IsNone() && aPanIds.IsDestinationPresent()) ||                               // Row 2.
-                (!aAddrs.mSource.IsNone() && !aPanIds.IsDestinationPresent() && !aPanIds.IsSourcePresent())) // Row 6.
+            if ((mAddrs.mSource.IsNone() && mPanIds.IsDestinationPresent()) ||                               // Row 2.
+                (!mAddrs.mSource.IsNone() && !mPanIds.IsDestinationPresent() && !mPanIds.IsSourcePresent())) // Row 6.
             {
                 fcf |= kFcfPanidCompression;
             }
@@ -159,11 +154,11 @@ void Frame::InitMacHeader(Type             aType,
             break;
         }
 
-        if (aAddrs.mSource.IsNone())
+        if (mAddrs.mSource.IsNone())
         {
             // Dst addr present, Src addr not present - rows 3,4.
 
-            if (!aPanIds.IsDestinationPresent()) // Row 4.
+            if (!mPanIds.IsDestinationPresent()) // Row 4.
             {
                 fcf |= kFcfPanidCompression;
             }
@@ -173,16 +168,16 @@ void Frame::InitMacHeader(Type             aType,
 
         // Both addresses are present - rows 7 to 14.
 
-        if (aAddrs.mSource.IsExtended() && aAddrs.mDestination.IsExtended())
+        if (mAddrs.mSource.IsExtended() && mAddrs.mDestination.IsExtended())
         {
             // Both addresses are extended - rows 7,8.
 
-            if (aPanIds.IsDestinationPresent()) // Row 7.
+            if (mPanIds.IsDestinationPresent()) // Row 7.
             {
                 break;
             }
         }
-        else if (aPanIds.GetSource() != aPanIds.GetDestination()) // Rows 9-14.
+        else if (mPanIds.GetSource() != mPanIds.GetDestination()) // Rows 9-14.
         {
             break;
         }
@@ -192,51 +187,53 @@ void Frame::InitMacHeader(Type             aType,
         break;
     }
 
-    if (aSuppressSequence)
+    if (mSuppressSequence)
     {
         fcf |= kFcfSequenceSuppression;
     }
 
-    builder.Init(mPsdu, GetMtu());
+    builder.Init(aTxFrame.mPsdu, aTxFrame.GetMtu());
     IgnoreError(builder.AppendLittleEndianUint16(fcf));
 
     if (IsSequencePresent(fcf))
     {
-        IgnoreError(builder.AppendUint8(0)); // Seq number
+        builder.Append<uint8_t>(); // Place holder for seq number
     }
 
     if (IsDstPanIdPresent(fcf))
     {
-        IgnoreError(builder.AppendLittleEndianUint16(aPanIds.GetDestination()));
+        IgnoreError(builder.AppendLittleEndianUint16(mPanIds.GetDestination()));
     }
 
-    IgnoreError(builder.AppendMacAddress(aAddrs.mDestination));
+    IgnoreError(builder.AppendMacAddress(mAddrs.mDestination));
 
     if (IsSrcPanIdPresent(fcf))
     {
-        IgnoreError(builder.AppendLittleEndianUint16(aPanIds.GetSource()));
+        IgnoreError(builder.AppendLittleEndianUint16(mPanIds.GetSource()));
     }
 
-    IgnoreError(builder.AppendMacAddress(aAddrs.mSource));
+    IgnoreError(builder.AppendMacAddress(mAddrs.mSource));
 
-    mLength = builder.GetLength();
+    aTxFrame.mLength = builder.GetLength();
 
-    if (aSecurityLevel != kSecurityNone)
+    if (mSecurityLevel != kSecurityNone)
     {
-        uint8_t secCtl = static_cast<uint8_t>(aSecurityLevel) | static_cast<uint8_t>(aKeyIdMode);
+        uint8_t secCtl = static_cast<uint8_t>(mSecurityLevel) | static_cast<uint8_t>(mKeyIdMode);
 
         IgnoreError(builder.AppendUint8(secCtl));
+        builder.AppendLength(CalculateSecurityHeaderSize(secCtl) - sizeof(secCtl));
 
-        mLength += CalculateSecurityHeaderSize(secCtl);
-        mLength += CalculateMicSize(secCtl);
+        micSize = CalculateMicSize(secCtl);
     }
 
-    if (aType == kTypeMacCmd)
+    if (mType == kTypeMacCmd)
     {
-        mLength += kCommandIdSize;
+        builder.Append<uint8_t>(); // Placeholder for Command ID
     }
 
-    mLength += GetFcsSize();
+    builder.AppendLength(micSize + aTxFrame.GetFcsSize());
+
+    aTxFrame.mLength = builder.GetLength();
 }
 
 void Frame::SetFrameControlField(uint16_t aFcf)
@@ -453,14 +450,6 @@ exit:
     return error;
 }
 
-void Frame::SetDstPanId(PanId aPanId)
-{
-    uint8_t index = FindDstPanIdIndex();
-
-    OT_ASSERT(index != kInvalidIndex);
-    LittleEndian::WriteUint16(aPanId, &mPsdu[index]);
-}
-
 uint8_t Frame::GetSequence(void) const
 {
     OT_ASSERT(IsSequencePresent());
@@ -501,40 +490,6 @@ Error Frame::GetDstAddr(Address &aAddress) const
 
 exit:
     return error;
-}
-
-void Frame::SetDstAddr(ShortAddress aShortAddress)
-{
-    OT_ASSERT(GetFcfDstAddr(GetFrameControlField()) == kFcfAddrShort);
-    LittleEndian::WriteUint16(aShortAddress, &mPsdu[FindDstAddrIndex()]);
-}
-
-void Frame::SetDstAddr(const ExtAddress &aExtAddress)
-{
-    uint8_t index = FindDstAddrIndex();
-
-    OT_ASSERT(GetFcfDstAddr(GetFrameControlField()) == kFcfAddrExt);
-    OT_ASSERT(index != kInvalidIndex);
-
-    aExtAddress.CopyTo(&mPsdu[index], ExtAddress::kReverseByteOrder);
-}
-
-void Frame::SetDstAddr(const Address &aAddress)
-{
-    switch (aAddress.GetType())
-    {
-    case Address::kTypeShort:
-        SetDstAddr(aAddress.GetShort());
-        break;
-
-    case Address::kTypeExtended:
-        SetDstAddr(aAddress.GetExtended());
-        break;
-
-    default:
-        OT_ASSERT(false);
-        OT_UNREACHABLE_CODE(break);
-    }
 }
 
 uint8_t Frame::FindSrcPanIdIndex(void) const
@@ -630,18 +585,6 @@ exit:
     return error;
 }
 
-Error Frame::SetSrcPanId(PanId aPanId)
-{
-    Error   error = kErrorNone;
-    uint8_t index = FindSrcPanIdIndex();
-
-    VerifyOrExit(index != kInvalidIndex, error = kErrorParse);
-    LittleEndian::WriteUint16(aPanId, &mPsdu[index]);
-
-exit:
-    return error;
-}
-
 uint8_t Frame::FindSrcAddrIndex(void) const
 {
     uint16_t fcf   = GetFrameControlField();
@@ -703,43 +646,6 @@ exit:
     return error;
 }
 
-void Frame::SetSrcAddr(ShortAddress aShortAddress)
-{
-    uint8_t index = FindSrcAddrIndex();
-
-    OT_ASSERT(GetFcfSrcAddr(GetFrameControlField()) == kFcfAddrShort);
-    OT_ASSERT(index != kInvalidIndex);
-
-    LittleEndian::WriteUint16(aShortAddress, &mPsdu[index]);
-}
-
-void Frame::SetSrcAddr(const ExtAddress &aExtAddress)
-{
-    uint8_t index = FindSrcAddrIndex();
-
-    OT_ASSERT(GetFcfSrcAddr(GetFrameControlField()) == kFcfAddrExt);
-    OT_ASSERT(index != kInvalidIndex);
-
-    aExtAddress.CopyTo(&mPsdu[index], ExtAddress::kReverseByteOrder);
-}
-
-void Frame::SetSrcAddr(const Address &aAddress)
-{
-    switch (aAddress.GetType())
-    {
-    case Address::kTypeShort:
-        SetSrcAddr(aAddress.GetShort());
-        break;
-
-    case Address::kTypeExtended:
-        SetSrcAddr(aAddress.GetExtended());
-        break;
-
-    default:
-        OT_ASSERT(false);
-    }
-}
-
 Error Frame::GetSecurityControlField(uint8_t &aSecurityControlField) const
 {
     Error   error = kErrorNone;
@@ -751,15 +657,6 @@ Error Frame::GetSecurityControlField(uint8_t &aSecurityControlField) const
 
 exit:
     return error;
-}
-
-void Frame::SetSecurityControlField(uint8_t aSecurityControlField)
-{
-    uint8_t index = FindSecurityHeaderIndex();
-
-    OT_ASSERT(index != kInvalidIndex);
-
-    mPsdu[index] = aSecurityControlField;
 }
 
 uint8_t Frame::FindSecurityHeaderIndex(void) const
@@ -1546,13 +1443,12 @@ void TxFrame::GenerateImmAck(const RxFrame &aFrame, bool aIsFramePending)
 #if OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
 Error TxFrame::GenerateEnhAck(const RxFrame &aRxFrame, bool aIsFramePending, const uint8_t *aIeData, uint8_t aIeLength)
 {
-    Error     error = kErrorNone;
-    Address   address;
-    PanId     panId;
-    Addresses addrs;
-    PanIds    panIds;
-    uint8_t   securityLevel = kSecurityNone;
-    uint8_t   keyIdMode     = kKeyIdMode0;
+    Error   error = kErrorNone;
+    Info    frameInfo;
+    Address address;
+    PanId   panId;
+    uint8_t securityLevel = kSecurityNone;
+    uint8_t keyIdMode     = kKeyIdMode0;
 
     // Validate the received frame.
 
@@ -1569,8 +1465,8 @@ Error TxFrame::GenerateEnhAck(const RxFrame &aRxFrame, bool aIsFramePending, con
     // Check `aRxFrame` has a valid source, which is then used as
     // ack frames destination.
 
-    SuccessOrExit(error = aRxFrame.GetSrcAddr(addrs.mDestination));
-    VerifyOrExit(!addrs.mDestination.IsNone(), error = kErrorParse);
+    SuccessOrExit(error = aRxFrame.GetSrcAddr(frameInfo.mAddrs.mDestination));
+    VerifyOrExit(!frameInfo.mAddrs.mDestination.IsNone(), error = kErrorParse);
 
     if (aRxFrame.GetSecurityEnabled())
     {
@@ -1583,12 +1479,12 @@ Error TxFrame::GenerateEnhAck(const RxFrame &aRxFrame, bool aIsFramePending, con
     if (aRxFrame.IsSrcPanIdPresent())
     {
         SuccessOrExit(error = aRxFrame.GetSrcPanId(panId));
-        panIds.SetDestination(panId);
+        frameInfo.mPanIds.SetDestination(panId);
     }
     else if (aRxFrame.IsDstPanIdPresent())
     {
         SuccessOrExit(error = aRxFrame.GetDstPanId(panId));
-        panIds.SetDestination(panId);
+        frameInfo.mPanIds.SetDestination(panId);
     }
 
     // Prepare the ack frame
@@ -1596,8 +1492,12 @@ Error TxFrame::GenerateEnhAck(const RxFrame &aRxFrame, bool aIsFramePending, con
     mChannel = aRxFrame.mChannel;
     ClearAllBytes(mInfo.mTxInfo);
 
-    InitMacHeader(kTypeAck, kVersion2015, addrs, panIds, static_cast<SecurityLevel>(securityLevel),
-                  static_cast<KeyIdMode>(keyIdMode));
+    frameInfo.mType          = kTypeAck;
+    frameInfo.mVersion       = kVersion2015;
+    frameInfo.mSecurityLevel = static_cast<SecurityLevel>(securityLevel);
+    frameInfo.mKeyIdMode     = static_cast<KeyIdMode>(keyIdMode);
+
+    frameInfo.PrepareHeadersIn(*this);
 
     SetFramePending(aIsFramePending);
     SetIePresent(aIeLength != 0);
@@ -1626,10 +1526,14 @@ exit:
 #if OPENTHREAD_CONFIG_WAKEUP_COORDINATOR_ENABLE
 Error TxFrame::GenerateWakeupFrame(PanId aPanId, const Address &aDest, const Address &aSource)
 {
-    Error    error = kErrorNone;
-    uint16_t fcf   = kTypeMultipurpose | kMpFcfLongFrame | kMpFcfPanidPresent | kMpFcfSecurityEnabled |
-                   kMpFcfSequenceSuppression | kMpFcfIePresent;
-    uint8_t index = 0;
+    Error        error = kErrorNone;
+    uint16_t     fcf;
+    uint8_t      secCtl;
+    uint8_t      index = 0;
+    FrameBuilder builder;
+
+    fcf = kTypeMultipurpose | kMpFcfLongFrame | kMpFcfPanidPresent | kMpFcfSecurityEnabled | kMpFcfSequenceSuppression |
+          kMpFcfIePresent;
 
     switch (aDest.GetType())
     {
@@ -1641,7 +1545,6 @@ Error TxFrame::GenerateWakeupFrame(PanId aPanId, const Address &aDest, const Add
         break;
     default:
         ExitNow(error = kErrorInvalidArgs);
-        break;
     }
 
     switch (aSource.GetType())
@@ -1654,22 +1557,22 @@ Error TxFrame::GenerateWakeupFrame(PanId aPanId, const Address &aDest, const Add
         break;
     default:
         ExitNow(error = kErrorInvalidArgs);
-        break;
     }
 
-    mLength = CalculateAddrFieldSize(fcf);
+    builder.Init(mPsdu, GetMtu());
 
-    OT_ASSERT(mLength != kInvalidSize);
+    IgnoreError(builder.AppendLittleEndianUint16(fcf));
+    IgnoreError(builder.AppendLittleEndianUint16(aPanId));
+    IgnoreError(builder.AppendMacAddress(aDest));
+    IgnoreError(builder.AppendMacAddress(aSource));
 
-    SetFrameControlField(fcf);
-    SetDstPanId(aPanId);
-    SetDstAddr(aDest);
-    SetSrcAddr(aSource);
+    secCtl = kKeyIdMode2 | kSecurityEncMic32;
+    IgnoreError(builder.AppendUint8(secCtl));
+    builder.AppendLength(CalculateSecurityHeaderSize(secCtl) - sizeof(secCtl));
 
-    mPsdu[mLength] = kKeyIdMode2 | kSecurityEncMic32;
-    mLength += CalculateSecurityHeaderSize(kKeyIdMode2 | kSecurityEncMic32);
-    mLength += CalculateMicSize(kKeyIdMode2 | kSecurityEncMic32);
-    mLength += GetFcsSize();
+    builder.AppendLength(CalculateMicSize(secCtl) + GetFcsSize());
+
+    mLength = builder.GetLength();
 
     SuccessOrExit(error = AppendHeaderIeAt<RendezvousTimeIe>(index));
     SuccessOrExit(error = AppendHeaderIeAt<ConnectionIe>(index));
@@ -1677,7 +1580,7 @@ Error TxFrame::GenerateWakeupFrame(PanId aPanId, const Address &aDest, const Add
 exit:
     return error;
 }
-#endif
+#endif // OPENTHREAD_CONFIG_WAKEUP_COORDINATOR_ENABLE
 
 Error RxFrame::ProcessReceiveAesCcm(const ExtAddress &aExtAddress, const KeyMaterial &aMacKey)
 {
