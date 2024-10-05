@@ -364,7 +364,7 @@ bool TcatAgent::CanProcessTlv(uint8_t aTlvType) const
     return IsCommandClassAuthorized(tlvCommandClass);
 }
 
-Error TcatAgent::HandleSingleTlv(Message &aIncomingMessage, Message &aOutgoingMessage)
+Error TcatAgent::HandleSingleTlv(const Message &aIncomingMessage, Message &aOutgoingMessage)
 {
     Error    error = kErrorParse;
     ot::Tlv  tlv;
@@ -406,8 +406,8 @@ Error TcatAgent::HandleSingleTlv(Message &aIncomingMessage, Message &aOutgoingMe
             break;
 
         case kTlvGetDiagnosticTlvs:
-            aIncomingMessage.SetOffset(offset);
-            error = HandleGetDiagnosticTlvs(aIncomingMessage, aOutgoingMessage, response);
+            error = HandleGetDiagnosticTlvs(aIncomingMessage, aOutgoingMessage,
+                                            offset, length, response);
             break;
 
         case kTlvStartThreadInterface:
@@ -535,9 +535,17 @@ exit:
 
 Error TcatAgent::HandleGetDiagnosticTlvs(const Message &aIncomingMessage,
                                          Message       &aOutgoingMessage,
+                                         uint16_t       aOffset,
+                                         uint16_t       aLength,
                                          bool          &response)
 {
-    Error error = kErrorNone;
+    Error           error = kErrorNone;
+    OffsetRange     offsetRange;
+    ot::Tlv         tlv;
+    ot::ExtendedTlv extTlv;
+    uint16_t        initialLength;
+    uint16_t        length;
+
 
     if (!CheckCommandClassAuthorizationFlags(mCommissionerAuthorizationField.mApplicationFlags,
                                              mDeviceAuthorizationField.mApplicationFlags, nullptr))
@@ -546,15 +554,37 @@ Error TcatAgent::HandleGetDiagnosticTlvs(const Message &aIncomingMessage,
         ExitNow();
     }
 
-    error = Get<NetworkDiagnostic::Server>().AppendRequestedTlvs(aIncomingMessage, aOutgoingMessage);
+    offsetRange.Init(aOffset, aLength);
+    initialLength = aOutgoingMessage.GetLength();
 
-    if(error == kErrorNone)
+    // Start with extTlv to avoid the need to for a temporary message buffer to calucalate reply length
+    extTlv.SetType(kTlvResponseWithPayload);
+    extTlv.SetLength(0);
+    SuccessOrExit(error = aOutgoingMessage.Append(extTlv));
+
+    error = Get<NetworkDiagnostic::Server>().AppendRequestedTlvs(aIncomingMessage, aOutgoingMessage, offsetRange);
+    length = aOutgoingMessage.GetLength() - initialLength - sizeof(extTlv);
+
+    if(length > ot::Tlv::kBaseTlvMaxLength)
     {
+        extTlv.SetLength(length);
+        aOutgoingMessage.WriteBytes(initialLength, &extTlv, sizeof(extTlv));
         response = true;
     }
-
-    // TODO: USe temp message and only add to aOutgoingMessage if successful
-
+    else if(length > 0)
+    {
+        tlv.SetType(kTlvResponseWithPayload);
+        tlv.SetLength(length);
+        aOutgoingMessage.WriteBytes(initialLength, &tlv, sizeof(tlv));
+        aOutgoingMessage.WriteBytesFromMessage(initialLength + sizeof(tlv), aOutgoingMessage, initialLength + sizeof(extTlv), length);
+        SuccessOrExit(error = aOutgoingMessage.SetLength(initialLength + sizeof(tlv) + length)); 
+        response = true;
+    }
+    else
+    {
+        aOutgoingMessage.SetLength(initialLength);
+    }
+    
 exit:
     return error;
 }
