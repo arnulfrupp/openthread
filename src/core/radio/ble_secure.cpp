@@ -480,7 +480,7 @@ void BleSecure::HandleTransmit(void)
         mTransmitTask.Post();
     }
 
-    SuccessOrExit(error = mTls.Send(*message, message->GetLength()));
+    error = mTls.Send(*message, message->GetLength());
 
 exit:
     if (error != kErrorNone)

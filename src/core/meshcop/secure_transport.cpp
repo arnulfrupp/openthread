@@ -752,8 +752,8 @@ Error SecureTransport::Send(Message &aMessage, uint16_t aLength)
 {
     Error   error = kErrorNone;
     uint8_t buffer[kApplicationDataMaxLength];
-
-    VerifyOrExit(aLength <= kApplicationDataMaxLength, error = kErrorNoBufs);
+    uint16_t bytesSent = 0;
+    uint16_t bytesRemaining = aLength;
 
     // Store message specific sub type.
     if (aMessage.GetSubType() != Message::kSubTypeNone)
@@ -761,9 +761,24 @@ Error SecureTransport::Send(Message &aMessage, uint16_t aLength)
         mMessageSubType = aMessage.GetSubType();
     }
 
-    aMessage.ReadBytes(0, buffer, aLength);
+    while (bytesRemaining > 0)
+    {
+        int mbedTlsErrorOrLen;
+        uint16_t nextBlockLen = bytesRemaining <= kApplicationDataMaxLength ? bytesRemaining : kApplicationDataMaxLength;
 
-    SuccessOrExit(error = Crypto::MbedTls::MapError(mbedtls_ssl_write(&mSsl, buffer, aLength)));
+        aMessage.ReadBytes(bytesSent, buffer, nextBlockLen);
+        mbedTlsErrorOrLen = mbedtls_ssl_write(&mSsl, buffer, nextBlockLen);
+
+        SuccessOrExit(error = Crypto::MbedTls::MapError(mbedTlsErrorOrLen));
+        
+        if(mbedTlsErrorOrLen < 1 || mbedTlsErrorOrLen > bytesRemaining)
+        {
+            ExitNow(error = kErrorFailed);
+        }
+
+        bytesSent += mbedTlsErrorOrLen;
+        bytesRemaining -= mbedTlsErrorOrLen;
+    }
 
     aMessage.Free();
 
