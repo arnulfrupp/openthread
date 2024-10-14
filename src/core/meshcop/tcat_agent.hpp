@@ -334,6 +334,9 @@ public:
     bool GetInstallCodeVerifyStatus(void) const { return mInstallCodeVerified; }
 
 private:
+    static constexpr uint16_t kBufferReserve = OPENTHREAD_CONFIG_DTLS_APPLICATION_DATA_MAX_LENGTH / 
+                                               (OPENTHREAD_CONFIG_MESSAGE_BUFFER_SIZE - sizeof(otMessageBuffer)) + 1; 
+
     Error Connected(MeshCoP::SecureTransport &aTlsContext);
     void  Disconnected(void);
 

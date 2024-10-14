@@ -197,8 +197,8 @@ Error BleSecure::SendMessage(ot::Message &aMessage)
     SuccessOrExit(error = mSendMessage->AppendBytesFromMessage(aMessage, 0, aMessage.GetLength()));
     SuccessOrExit(error = Flush());
 
-exit:
     aMessage.Free();
+exit:
     return error;
 }
 
@@ -247,6 +247,7 @@ Error BleSecure::Flush(void)
 {
     Error error = kErrorNone;
 
+    VerifyOrExit(mSendMessage != nullptr);
     VerifyOrExit(IsConnected(), error = kErrorInvalidState);
     VerifyOrExit(mSendMessage->GetLength() != 0, error = kErrorNone);
 
@@ -346,6 +347,8 @@ void BleSecure::HandleTlsConnectEvent(MeshCoP::SecureTransport::ConnectEvent aEv
     {
         FreeMessage(mReceivedMessage);
         mReceivedMessage = nullptr;
+        FreeMessage(mSendMessage);
+        mSendMessage = nullptr;
 
         if (mTcatAgent.IsEnabled())
         {
@@ -430,25 +433,23 @@ void BleSecure::HandleTlsReceive(uint8_t *aBuf, uint16_t aLength)
 
             if (mTcatAgent.IsEnabled())
             {
-                ot::Message *message;
                 Error        error = kErrorNone;
 
-                message = Get<MessagePool>().Allocate(Message::kTypeBle);
-                VerifyOrExit(message != nullptr, error = kErrorNoBufs);
-
-                error = mTcatAgent.HandleSingleTlv(*mReceivedMessage, *message);
-                if (message->GetLength() != 0)
+                IgnoreReturnValue(Flush());
+                
+                if (mSendMessage == nullptr)
                 {
-                    IgnoreReturnValue(SendMessage(*message));
+                    mSendMessage = Get<MessagePool>().Allocate(Message::kTypeBle);
+                    VerifyOrExit(mSendMessage != nullptr, error = kErrorNoBufs);
                 }
+
+                error = mTcatAgent.HandleSingleTlv(*mReceivedMessage, *mSendMessage);
+                IgnoreReturnValue(Flush());
 
                 if (error == kErrorAbort)
                 {
                     // kErrorAbort indicates that a Disconnect command TLV has been received.
                     Disconnect();
-                    // BleSecure is not stopped here, it must remain active in advertising state and
-                    // must be ready to receive a next TCAT commissioner.
-                    ExitNow();
                 }
             }
             else

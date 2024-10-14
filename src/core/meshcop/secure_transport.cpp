@@ -755,6 +755,8 @@ Error SecureTransport::Send(Message &aMessage, uint16_t aLength)
     uint16_t bytesSent = 0;
     uint16_t bytesRemaining = aLength;
 
+    VerifyOrExit(aLength <= kApplicationDataMaxLength || !mDatagramTransport, error = kErrorNoBufs);
+
     // Store message specific sub type.
     if (aMessage.GetSubType() != Message::kSubTypeNone)
     {
