@@ -63,8 +63,10 @@ TcatAgent::TcatAgent(Instance &aInstance)
     , mTimerSetsToActive(false)
     , mActiveOrStandbyTimer(aInstance)
     , mTcatActiveDurationMs(0)
+    , mHashVerificationAttempts(1)
 {
     ClearCommissionerState();
+    mLastHashVerificationTimestamp = Get<UptimeTracker>().GetUptimeInSeconds();
 }
 
 void TcatAgent::ClearCommissionerState(void)
@@ -934,9 +936,25 @@ Error TcatAgent::VerifyHash(const Message &aIncomingMessage,
 {
     Error                    error = kErrorNone;
     Crypto::HmacSha256::Hash hash;
+    UptimeSec                currentTime = Get<UptimeTracker>().GetUptimeInSeconds();
+    uint32_t                 newAttempts = (currentTime - mLastHashVerificationTimestamp) / kHashVerificationAttmptTime;
 
     VerifyOrExit(aLength == Crypto::HmacSha256::Hash::kSize, error = kErrorSecurity);
     VerifyOrExit(mRandomChallenge != 0, error = kErrorSecurity);
+
+    if(mHashVerificationAttempts + newAttempts <= kHashVerificationMaxAttmpts)
+    {
+        mHashVerificationAttempts += newAttempts;
+    }
+    else 
+    {
+        // kHashVerificationMaxAttmpts attempts in case uptime has overflown can be tolerated (very unlikely scenario).
+        mHashVerificationAttempts = kHashVerificationMaxAttmpts;
+    }   
+
+    mLastHashVerificationTimestamp = currentTime;
+    VerifyOrExit(mHashVerificationAttempts > 0, error = kErrorSecurity);
+    mHashVerificationAttempts--;
 
     SuccessOrExit(error = CalculateHash(mRandomChallenge, reinterpret_cast<const char *>(aBuf), aBufLen, hash));
     DumpDebg("Hash", &hash, sizeof(hash));
