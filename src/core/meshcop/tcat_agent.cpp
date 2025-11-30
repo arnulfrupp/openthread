@@ -952,8 +952,8 @@ Error TcatAgent::VerifyHash(const Message &aIncomingMessage,
         mHashVerificationAttempts = kHashVerificationMaxAttmpts;
     }   
 
-    mLastHashVerificationTimestamp = currentTime;
     VerifyOrExit(mHashVerificationAttempts > 0, error = kErrorSecurity);
+    mLastHashVerificationTimestamp = currentTime;
     mHashVerificationAttempts--;
 
     SuccessOrExit(error = CalculateHash(mRandomChallenge, reinterpret_cast<const char *>(aBuf), aBufLen, hash));
