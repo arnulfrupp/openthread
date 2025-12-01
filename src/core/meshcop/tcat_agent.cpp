@@ -960,6 +960,7 @@ Error TcatAgent::VerifyHash(const Message &aIncomingMessage,
     DumpDebg("Hash", &hash, sizeof(hash));
 
     VerifyOrExit(aIncomingMessage.Compare(aOffset, hash), error = kErrorSecurity);
+    mHashVerificationAttempts++;
 
 exit:
     return error;
