@@ -143,15 +143,16 @@ private:
 #else
     otCoapResource mResource;
 #endif
-    char mUriPath[kMaxUriLength];
-    char mResourceContent[kMaxBufferSize];
+    char     mUriPath[kMaxUriLength];
+    char     mResourceContent[kMaxBufferSize];
+    uint16_t mPort;
 
-    bool    mShutdownFlag;
-    bool    mUseCertificate;
-    uint8_t mPsk[kPskMaxLength];
-    uint8_t mPskLength;
-    uint8_t mPskId[kPskIdMaxLength];
-    uint8_t mPskIdLength;
+    bool     mShutdownFlag;
+    bool     mUseCertificate;
+    uint8_t  mPsk[kPskMaxLength];
+    uint8_t  mPskLength;
+    uint8_t  mPskId[kPskIdMaxLength];
+    uint8_t  mPskIdLength;
 #if OPENTHREAD_CONFIG_COAP_BLOCKWISE_TRANSFER_ENABLE
     uint32_t mBlockCount;
 #endif

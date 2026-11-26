@@ -48,6 +48,7 @@ namespace Cli {
 
 CoapSecure::CoapSecure(otInstance *aInstance, OutputImplementer &aOutputImplementer)
     : Utils(aInstance, aOutputImplementer)
+    , mPort(OT_DEFAULT_COAP_SECURE_PORT)
     , mShutdownFlag(false)
     , mUseCertificate(false)
     , mPskLength(0)
@@ -187,7 +188,11 @@ exit:
  * coaps start 8
  * Done
  * @endcode
- * @cparam coaps start [@ca{check-peer-cert} | @ca{max-conn-attempts}]
+ * @code
+ * coaps start false 1234
+ * Done
+ * @endcode
+ * @cparam coaps start [@ca{check-peer-cert} | @ca{max-conn-attempts}] [@ca{port}]
  * The `check-peer-cert` parameter determines if the peer-certificate check is
  * enabled (default) or disabled.
  * The `max-conn-attempts` parameter sets the maximum number of allowed
@@ -200,12 +205,17 @@ exit:
  *   * No argument specified: Defaults are used.
  *   * Setting `check-peer-cert` to `true`:
  *     Has the same effect as omitting the argument, which is that the
- *     `check-peer-cert` value is `true`, and the `max-conn-attempts` value is 0.
+ *     `check-peer-cert` value is `true`, and the `max-conn-attempts` value is 0,
+ *     and the `port` value is the default.
  *   * Setting `check-peer-cert` to `false`:
- *    `check-peer-cert` value is `false`, and the `max-conn-attempts` value is 0.
+ *     `check-peer-cert` value is `false`, and the `max-conn-attempts` value is 0,
+ *     and the `port` value is the default.
  *   * Specifying a number:
  *     `check-peer-cert` is `true`, and the `max-conn-attempts` value is the
- *     number specified in the argument.
+ *     number specified in the argument, and the `port` value is the default.
+ * two arguments:
+ *   * The first argument is `check-peer-cert` or `max-conn-attempts` as described above.
+ *   * The second argument is the `port` value.    
  * @par
  * Starts the CoAP Secure service. @moreinfo{@coaps}.
  * @sa otCoapSecureStart
@@ -217,6 +227,8 @@ template <> otError CoapSecure::Process<Cmd("start")>(Arg aArgs[])
     otError  error           = OT_ERROR_NONE;
     bool     verifyPeerCert  = true;
     uint16_t maxConnAttempts = 0;
+
+    mPort = OT_DEFAULT_COAP_SECURE_PORT;
 
     if (!aArgs[0].IsEmpty())
     {
@@ -232,6 +244,11 @@ template <> otError CoapSecure::Process<Cmd("start")>(Arg aArgs[])
         {
             SuccessOrExit(error = aArgs[0].ParseAsUint16(maxConnAttempts));
         }
+
+        if(!aArgs[1].IsEmpty())
+        {
+            SuccessOrExit(error = aArgs[1].ParseAsUint16(mPort));
+        }
     }
 
     otCoapSecureSetSslAuthMode(GetInstancePtr(), verifyPeerCert);
@@ -241,7 +258,7 @@ template <> otError CoapSecure::Process<Cmd("start")>(Arg aArgs[])
     otCoapSecureSetDefaultHandler(GetInstancePtr(), &CoapSecure::DefaultHandler, this);
 #endif
 
-    error = otCoapSecureStartWithMaxConnAttempts(GetInstancePtr(), OT_DEFAULT_COAP_SECURE_PORT, maxConnAttempts,
+    error = otCoapSecureStartWithMaxConnAttempts(GetInstancePtr(), mPort, maxConnAttempts,
                                                  nullptr, nullptr);
 
 exit:
@@ -665,7 +682,7 @@ template <> otError CoapSecure::Process<Cmd("connect")>(Arg aArgs[])
 
     ClearAllBytes(sockaddr);
     SuccessOrExit(error = aArgs[0].ParseAsIp6Address(sockaddr.mAddress));
-    sockaddr.mPort = OT_DEFAULT_COAP_SECURE_PORT;
+    sockaddr.mPort = mPort;
 
     if (!aArgs[1].IsEmpty())
     {
