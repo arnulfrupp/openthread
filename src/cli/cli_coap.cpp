@@ -49,6 +49,7 @@ Coap::Coap(otInstance *aInstance, OutputImplementer &aOutputImplementer)
     , mUseDefaultRequestTxParameters(true)
     , mUseDefaultResponseTxParameters(true)
     , mLinkSecurityEnabled(true)
+    , mPort(OT_DEFAULT_COAP_PORT)
 #if OPENTHREAD_CONFIG_COAP_OBSERVE_API_ENABLE
     , mObserveSerial(0)
     , mSubscriberConfirmableNotifications(false)
@@ -82,7 +83,7 @@ otError Coap::CancelResourceSubscription(bool aSendCancelMessage)
 
     ClearAllBytes(messageInfo);
     messageInfo.mPeerAddr = mRequestAddr;
-    messageInfo.mPeerPort = OT_DEFAULT_COAP_PORT;
+    messageInfo.mPeerPort = mPort;
 
     VerifyOrExit(mRequestToken.mLength != 0, error = OT_ERROR_INVALID_STATE);
 
@@ -332,15 +333,33 @@ exit:
  * coap start
  * Done
  * @endcode
+ * @code
+ * coap start 1234
+ * Done
+ * @endcode
+ * @cparam coap start @ca{port}
+ *   * `port`: The UDP port to use for the CoAP server.
  * @par
  * Starts the CoAP server. @moreinfo{@coap}.
  * @sa otCoapStart
  */
 template <> otError Coap::Process<Cmd("start")>(Arg aArgs[])
 {
-    OT_UNUSED_VARIABLE(aArgs);
+    otError error = OT_ERROR_NONE;
 
-    return otCoapStart(GetInstancePtr(), OT_DEFAULT_COAP_PORT);
+    if (aArgs[0].IsEmpty())
+    {
+        mPort = OT_DEFAULT_COAP_PORT;
+    }
+    else
+    {
+        SuccessOrExit(error = aArgs[0].ParseAsUint16(mPort));
+    }
+
+    SuccessOrExit(error = otCoapStart(GetInstancePtr(), mPort));
+
+exit:
+    return error;
 }
 
 /**
@@ -817,7 +836,7 @@ otError Coap::ProcessRequest(Arg aArgs[], otCoapCode aCoapCode)
 
     ClearAllBytes(messageInfo);
     messageInfo.mPeerAddr = coapDestinationIp;
-    messageInfo.mPeerPort = OT_DEFAULT_COAP_PORT;
+    messageInfo.mPeerPort = mPort;
 
 #if OPENTHREAD_CONFIG_COAP_OBSERVE_API_ENABLE
     if (aCoapObserve)
