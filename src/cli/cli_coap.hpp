@@ -156,6 +156,7 @@ private:
 
     otCoapTxParameters mRequestTxParameters;
     otCoapTxParameters mResponseTxParameters;
+    bool               mLinkSecurityEnabled;
 
 #if OPENTHREAD_CONFIG_COAP_BLOCKWISE_TRANSFER_ENABLE
     otCoapBlockwiseResource mResource;

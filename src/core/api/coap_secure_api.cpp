@@ -205,6 +205,16 @@ void otCoapSecureSetDefaultHandler(otInstance *aInstance, otCoapRequestHandler a
     AsCoreType(aInstance).Get<Coap::ApplicationCoapSecure>().SetDefaultHandler(aHandler, aContext);
 }
 
+bool otCoapSecureIsLinkSecurityEnabled(otInstance *aInstance)
+{
+    return AsCoreType(aInstance).Get<Coap::ApplicationCoapSecure>().IsLinkSecurityEnabled();
+}
+
+otError otCoapSecureSetLayerTwoSecurity(otInstance *aInstance, bool aLayerTwoSecurity)
+{
+    return AsCoreType(aInstance).Get<Coap::ApplicationCoapSecure>().SetLayerTwoSecurity(aLayerTwoSecurity);
+}
+
 #if OPENTHREAD_CONFIG_COAP_BLOCKWISE_TRANSFER_ENABLE
 otError otCoapSecureSendResponseBlockWise(otInstance                 *aInstance,
                                           otMessage                  *aMessage,

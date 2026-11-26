@@ -685,6 +685,24 @@ public:
     }
 
     /**
+     * Indicates whether or not link security is enabled.
+     *
+     * @retval TRUE   If link security is enabled.
+     * @retval FALSE  If link security is not enabled.
+     */
+    bool IsLinkSecurityEnabled(void) const { return mLayerTwoSecurity; } 
+
+    /**
+     * Sets whether to use layer two security or not.
+     * 
+     * @param[in] aLayerTwoSecurity     Specifies whether to use layer two security or not.
+     * 
+     * @retval kErrorNone               Successfully set the layer two security.
+     * @retval kErrorInvalidState       Cannot set layer two security when already connected.
+     */
+    Error SetLayerTwoSecurity(bool aLayerTwoSecurity); 
+
+    /**
      * Indicates whether or not the secure transport uses a UDP socket.
      *
      * @retval TRUE   The secure transport is open and uses a UDP socket.

@@ -342,6 +342,49 @@ exit:
     return error;
 }
 
+template <> otError CoapSecure::Process<Cmd("linksecurity")>(Arg aArgs[])
+{
+    otError error = OT_ERROR_NONE;
+
+    /**
+     * @cli coaps linksecurity
+     * @code
+     * coaps linksecurity
+     * Enabled
+     * Done
+     * @endcode
+     * @par
+     * Indicates whether link security is enabled or disabled.
+     */
+    if (aArgs[0].IsEmpty())
+    {
+        OutputEnabledDisabledStatus(otCoapSecureIsLinkSecurityEnabled(GetInstancePtr()));
+    }
+    /**
+     * @cli coaps linksecurity (enable,disable)
+     * @code
+     * coaps linksecurity enable
+     * Done
+     * @endcode
+     * @code
+     * coaps linksecurity disable
+     * Done
+     * @endcode
+     * @par
+     * Enables or disables link security.
+     */
+    else
+    {
+        bool enableLinkSecurity;
+        
+        SuccessOrExit(error = ParseEnableOrDisable(aArgs[0], enableLinkSecurity));
+        error = otCoapSecureSetLayerTwoSecurity(GetInstancePtr(), enableLinkSecurity);
+    }
+
+exit:
+    return error;
+}
+
 /**
  * @cli coaps get
  * @code
@@ -737,7 +780,8 @@ otError CoapSecure::Process(Arg aArgs[])
 
     static constexpr Command kCommands[] = {
         CmdEntry("connect"),  CmdEntry("delete"),       CmdEntry("disconnect"),  CmdEntry("get"),
-        CmdEntry("isclosed"), CmdEntry("isconnactive"), CmdEntry("isconnected"), CmdEntry("post"),
+        CmdEntry("isclosed"), CmdEntry("isconnactive"), CmdEntry("isconnected"), CmdEntry("linksecurity"),
+        CmdEntry("post"),
 #ifdef MBEDTLS_KEY_EXCHANGE_PSK_ENABLED
         CmdEntry("psk"),
 #endif

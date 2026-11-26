@@ -48,6 +48,7 @@ Coap::Coap(otInstance *aInstance, OutputImplementer &aOutputImplementer)
     : Utils(aInstance, aOutputImplementer)
     , mUseDefaultRequestTxParameters(true)
     , mUseDefaultResponseTxParameters(true)
+    , mLinkSecurityEnabled(true)
 #if OPENTHREAD_CONFIG_COAP_OBSERVE_API_ENABLE
     , mObserveSerial(0)
     , mSubscriberConfirmableNotifications(false)
@@ -74,9 +75,10 @@ Coap::Coap(otInstance *aInstance, OutputImplementer &aOutputImplementer)
 #if OPENTHREAD_CONFIG_COAP_OBSERVE_API_ENABLE
 otError Coap::CancelResourceSubscription(bool aSendCancelMessage)
 {
-    otError       error   = OT_ERROR_NONE;
-    otMessage    *message = nullptr;
-    otMessageInfo messageInfo;
+    otError            error   = OT_ERROR_NONE;
+    otMessage         *message = nullptr;
+    otMessageInfo      messageInfo;
+    otMessageSettings  messageSettings = {mLinkSecurityEnabled, OT_MESSAGE_PRIORITY_NORMAL};
 
     ClearAllBytes(messageInfo);
     messageInfo.mPeerAddr = mRequestAddr;
@@ -86,7 +88,7 @@ otError Coap::CancelResourceSubscription(bool aSendCancelMessage)
 
     if (aSendCancelMessage)
     {
-        message = otCoapNewMessage(GetInstancePtr(), nullptr);
+        message = otCoapNewMessage(GetInstancePtr(), &messageSettings);
         VerifyOrExit(message != nullptr, error = OT_ERROR_NO_BUFS);
 
         SuccessOrExit(error = otCoapMessageInit(message, OT_COAP_TYPE_CONFIRMABLE, OT_COAP_CODE_GET));
@@ -239,8 +241,9 @@ exit:
 template <> otError Coap::Process<Cmd("set")>(Arg aArgs[])
 {
 #if OPENTHREAD_CONFIG_COAP_OBSERVE_API_ENABLE
-    otMessage    *notificationMessage = nullptr;
-    otMessageInfo messageInfo;
+    otMessage         *notificationMessage = nullptr;
+    otMessageInfo      messageInfo;
+    otMessageSettings  messageSettings = {mLinkSecurityEnabled, OT_MESSAGE_PRIORITY_NORMAL};
 #endif
     otError error = OT_ERROR_NONE;
 
@@ -265,7 +268,7 @@ template <> otError Coap::Process<Cmd("set")>(Arg aArgs[])
             OutputFormat("sending coap notification to ");
             OutputIp6AddressLine(mSubscriberSock.mAddress);
 
-            notificationMessage = otCoapNewMessage(GetInstancePtr(), nullptr);
+            notificationMessage = otCoapNewMessage(GetInstancePtr(), &messageSettings);
             VerifyOrExit(notificationMessage != nullptr, error = OT_ERROR_NO_BUFS);
 
             SuccessOrExit(
@@ -467,6 +470,46 @@ exit:
     return error;
 }
 
+template <> otError Coap::Process<Cmd("linksecurity")>(Arg aArgs[])
+{
+    otError error = OT_ERROR_NONE;
+
+    /**
+     * @cli coap linksecurity
+     * @code
+     * coap linksecurity
+     * Enabled
+     * Done
+     * @endcode
+     * @par
+     * Indicates whether link security is enabled or disabled.
+     */
+    if (aArgs[0].IsEmpty())
+    {
+        OutputEnabledDisabledStatus(mLinkSecurityEnabled);
+    }
+    /**
+     * @cli coap linksecurity (enable,disable)
+     * @code
+     * coap linksecurity enable
+     * Done
+     * @endcode
+     * @code
+     * coap linksecurity disable
+     * Done
+     * @endcode
+     * @par
+     * Enables or disables link security.
+     */
+    else
+    {
+        SuccessOrExit(error = ParseEnableOrDisable(aArgs[0], mLinkSecurityEnabled));
+    }
+
+exit:
+    return error;
+}
+
 /**
  * @cli coap get
  * @code
@@ -611,11 +654,12 @@ otError Coap::ProcessRequest(Arg aArgs[], otCoapCode aCoapCode, bool aCoapObserv
 otError Coap::ProcessRequest(Arg aArgs[], otCoapCode aCoapCode)
 #endif
 {
-    otError       error   = OT_ERROR_NONE;
-    otMessage    *message = nullptr;
-    otMessageInfo messageInfo;
-    uint16_t      payloadLength    = 0;
-    char         *uriQueryStartPtr = nullptr;
+    otError             error   = OT_ERROR_NONE;
+    otMessage          *message = nullptr;
+    otMessageInfo       messageInfo;
+    otMessageSettings   messageSettings = {mLinkSecurityEnabled, OT_MESSAGE_PRIORITY_NORMAL};
+    uint16_t            payloadLength    = 0;
+    char               *uriQueryStartPtr = nullptr;
 
     // Default parameters
     char         coapUri[kMaxUriLength] = "test";
@@ -702,7 +746,7 @@ otError Coap::ProcessRequest(Arg aArgs[], otCoapCode aCoapCode)
     }
 #endif
 
-    message = otCoapNewMessage(GetInstancePtr(), nullptr);
+    message = otCoapNewMessage(GetInstancePtr(), &messageSettings);
     VerifyOrExit(message != nullptr, error = OT_ERROR_NO_BUFS);
 
     SuccessOrExit(error = otCoapMessageInit(message, coapType, aCoapCode));
@@ -834,7 +878,7 @@ otError Coap::Process(Arg aArgs[])
 #if OPENTHREAD_CONFIG_COAP_OBSERVE_API_ENABLE
         CmdEntry("cancel"),
 #endif
-        CmdEntry("delete"),     CmdEntry("get"),
+        CmdEntry("delete"),     CmdEntry("get"),   CmdEntry("linksecurity"),
 #if OPENTHREAD_CONFIG_COAP_OBSERVE_API_ENABLE
         CmdEntry("observe"),
 #endif
@@ -871,9 +915,10 @@ void Coap::HandleRequest(void *aContext, otMessage *aMessage, const otMessageInf
 
 void Coap::HandleRequest(otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
-    otError    error           = OT_ERROR_NONE;
-    otMessage *responseMessage = nullptr;
-    otCoapCode responseCode    = OT_COAP_CODE_EMPTY;
+    otError            error           = OT_ERROR_NONE;
+    otMessage         *responseMessage = nullptr;
+    otMessageSettings  messageSettings = {mLinkSecurityEnabled, OT_MESSAGE_PRIORITY_NORMAL};
+    otCoapCode         responseCode    = OT_COAP_CODE_EMPTY;
 #if OPENTHREAD_CONFIG_COAP_OBSERVE_API_ENABLE
     uint64_t observe        = 0;
     bool     observePresent = false;
@@ -1019,7 +1064,7 @@ void Coap::HandleRequest(otMessage *aMessage, const otMessageInfo *aMessageInfo)
         responseCode = OT_COAP_CODE_CHANGED;
     }
 
-    responseMessage = otCoapNewMessage(GetInstancePtr(), nullptr);
+    responseMessage = otCoapNewMessage(GetInstancePtr(), &messageSettings);
     VerifyOrExit(responseMessage != nullptr, error = OT_ERROR_NO_BUFS);
 
     SuccessOrExit(error = otCoapMessageInitResponse(responseMessage, aMessage,

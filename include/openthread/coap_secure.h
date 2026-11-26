@@ -376,6 +376,27 @@ void otCoapSecureSetClientConnectEventCallback(otInstance                     *a
                                                void                           *aContext);
 
 /**
+ * Indicates whether or not link security is enabled.
+ *
+ * @param[in]  aInstance    A pointer to an OpenThread instance.
+ * 
+ * @retval TRUE   If link security is enabled.
+ * @retval FALSE  If link security is not enabled.
+ */
+bool otCoapSecureIsLinkSecurityEnabled(otInstance *aInstance);
+                                               
+/**
+ * Sets whether to use layer two security or not.
+ * 
+ * @param[in]  aInstance            A pointer to an OpenThread instance.
+ * @param[in]  aLayerTwoSecurity    Specifies whether to use layer two security or not.
+ * 
+ * @retval OT_ERROR_NONE            Successfully set the layer two security.
+ * @retval OT_ERROR_INVALID_STATE   Cannot set layer two security when already connected.
+ */                                               
+otError otCoapSecureSetLayerTwoSecurity(otInstance *aInstance, bool aLayerTwoSecurity);
+
+/**
  * Sends a CoAP response block-wise from the CoAP Secure server.
  *
  * Is available when OPENTHREAD_CONFIG_COAP_BLOCKWISE_TRANSFER_ENABLE configuration

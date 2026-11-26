@@ -782,6 +782,18 @@ exit:
     return error;
 }
 
+Error SecureTransport::SetLayerTwoSecurity(bool aLayerTwoSecurity)
+{
+    Error error = kErrorNone;
+
+    VerifyOrExit(!mIsOpen, error = kErrorInvalidState);
+
+    mLayerTwoSecurity = aLayerTwoSecurity;
+
+exit:
+    return error;
+} 
+
 void SecureTransport::HandleReceive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
     SecureSession *session;
